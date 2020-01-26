@@ -96,7 +96,6 @@ class ChangeRequest(models.Model):
                     cr.data_changed = filter_data(cr.data_changed, fields)
             elif cr.request_type == ChangeRequest.Type.DELETE:
                 cr.data_changed = None
-        # TODO: pass/set comment
         cr.set_user(ChangeRequest.thread.request)
         return cr
 
@@ -128,12 +127,31 @@ class ChangeRequest(models.Model):
         self.mod = request.user
         self.mod_ip = get_ip_from_request(request)
 
+    def save(self, *args, **kwargs):
+        # 1) Save ChangeRequest if request type is something like ADD or DELETE
+        # -OR-
+        # 2) Prevent duplicates: when modifying existing entries, only save if data_revert does not equal data_changed
+        if (self.request_type not in (self.Type.MODIFY, self.Type.RELATED)) or (self.data_revert != self.data_changed):
+            super().save(*args, **kwargs)
 
-class BaseHistoryModel(models.Model):
-    """Adds logging features for for models with django-changerequest support"""
+
+class HistoryModel(models.Model):
+    """Adds audit logging and moderation features for for models with django-changerequest support"""
     # Basic timestamp fields added to each model
     date_created = models.DateTimeField(auto_now_add=True, blank=True)
     date_modified = models.DateTimeField(auto_now=True, blank=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._comment = ''
+
+    @property
+    def comment(self):
+        return self._comment
+
+    @comment.setter
+    def comment(self, comment):
+        self._comment = comment
 
     def data_revert(self):
         """Obtains unaltered data (before save) from database"""
@@ -143,14 +161,12 @@ class BaseHistoryModel(models.Model):
         return None  # else
 
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-
-    class Meta:
-        abstract = True
-
-
-class HistoryModel(BaseHistoryModel):
-    """Adds moderation features for models with django-changerequest support"""
+        cr = ChangeRequest.create(self)
+        cr.status = ChangeRequest.Status.APPROVED
+        cr.comment = self.comment
+        cr.save()
+        if cr.pk:
+            models.Model.save(self, *args, **kwargs)
 
     class Meta:
         abstract = True
