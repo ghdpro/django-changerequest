@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ChangeRequest(models.Model):
     thread = threading.local()  # Used to store request via middleware
 
-    class Type:
+    class Type(models.IntegerChoices):
         """Constants that define actions for which ChangeRequest records can be saved
 
         The first three are obvious; 'Related' is used for associated data that usually
@@ -30,20 +30,8 @@ class ChangeRequest(models.Model):
         MODIFY = 2
         DELETE = 3
         RELATED = 4
-        choices = (
-            (ADD, 'Add'),
-            (MODIFY, 'Modify'),
-            (DELETE, 'Delete'),
-            (RELATED, 'Related')
-        )
-        verb = {
-            ADD: 'Added',
-            MODIFY: 'Updated',
-            DELETE: 'Deleted'
-            # RELATED: n/a
-        }
 
-    class Status:
+    class Status(models.IntegerChoices):
         """Constants that define the status of a ChangeRequest
 
         Pending    = ChangeRequest is awaiting moderation; data is not yet committed to the database
@@ -57,14 +45,6 @@ class ChangeRequest(models.Model):
         DENIED = 3
         WITHDRAWN = 4
         REVERTED = 5
-        choices = (
-            (PENDING, 'Pending'),
-            (APPROVED, 'Approved'),
-            (DENIED, 'Denied'),
-            (WITHDRAWN, 'Withdrawn'),
-            (REVERTED, 'Reverted'),
-        )
-        lookup = dict((v[1].lower(), v[0]) for k, v in enumerate(choices))
 
     # ChangeRequest does not support non-integer primary keys
     object_type = models.ForeignKey(ContentType, related_name='%(class)s_object', on_delete=models.PROTECT)
@@ -161,22 +141,14 @@ class ChangeRequest(models.Model):
 
 
 class HistoryModel(models.Model):
-    """Adds audit logging and moderation features for for models with django-changerequest support"""
+    """Adds audit logging and staged editing support to models"""
     # Basic timestamp fields added to each model
     date_created = models.DateTimeField(auto_now_add=True, blank=True)
     date_modified = models.DateTimeField(auto_now=True, blank=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._comment = ''
-
-    @property
-    def comment(self) -> str:
-        return self._comment
-
-    @comment.setter
-    def comment(self, comment: str):
-        self._comment = comment
+        self.comment = ''
 
     def data_revert(self):
         """Obtains unaltered data (before save) from database"""
@@ -193,8 +165,10 @@ class HistoryModel(models.Model):
         if cr.pk:
             cr.log()
             super().save(*args, **kwargs)
+            # Only ADD/MODIFY as possible choices: DELETE and RELATED should be handled elsewhere
+            verb = 'Added' if cr.request_type == ChangeRequest.Type.ADD else 'Updated'  # MODIFY
             msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
-                            f'{ChangeRequest.Type.verb[cr.request_type]} {cr.get_object_type()} "{cr.object_str}"')
+                            f'{verb} {cr.get_object_type()} "{cr.object_str}"')
 
     class Meta:
         abstract = True
