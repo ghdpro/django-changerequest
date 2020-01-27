@@ -1,5 +1,6 @@
 """django-changerequest models"""
 
+import logging
 import threading
 
 from django.conf import settings
@@ -8,9 +9,12 @@ from django.db import models
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.contrib import messages as msg
 from django.contrib.postgres.fields import JSONField
 
 from .utils import format_object_str, model_to_dict, changed_keys, filter_data, get_ip_from_request
+
+logger = logging.getLogger(__name__)
 
 
 class ChangeRequest(models.Model):
@@ -32,6 +36,12 @@ class ChangeRequest(models.Model):
             (DELETE, 'Delete'),
             (RELATED, 'Related')
         )
+        verb = {
+            ADD: 'Added',
+            MODIFY: 'Updated',
+            DELETE: 'Deleted'
+            # RELATED: n/a
+        }
 
     class Status:
         """Constants that define the status of a ChangeRequest
@@ -77,10 +87,14 @@ class ChangeRequest(models.Model):
     date_modified = models.DateTimeField(auto_now=True, blank=True)
 
     def __str__(self):
-        return format_object_str(self.object_type, self.object_str, self.object_id)
+        return format_object_str(self.get_object_type(), self.object_str, self.object_id)
+    
+    @classmethod
+    def get_request(cls):
+        return cls.thread.request
 
     @classmethod
-    def create(cls, obj: object, request_type: int = None) -> object:
+    def create(cls, obj: 'HistoryModel', request_type: int = None) -> object:
         """Creates a ChangeRequest object"""
         cr = cls()
         cr.set_object(obj)
@@ -96,10 +110,10 @@ class ChangeRequest(models.Model):
                     cr.data_changed = filter_data(cr.data_changed, fields)
             elif cr.request_type == ChangeRequest.Type.DELETE:
                 cr.data_changed = None
-        cr.set_user(ChangeRequest.thread.request)
+        cr.set_user(ChangeRequest.get_request())
         return cr
 
-    def set_object(self, obj):
+    def set_object(self, obj: models.Model):
         if obj.pk:
             # Existing object
             self.object = obj
@@ -108,6 +122,10 @@ class ChangeRequest(models.Model):
             self.object_type = ContentType.objects.get_for_model(obj)
             self.object_id = None
         self.object_str = str(obj)
+
+    def get_object_type(self) -> str:
+        # Django 3.0 now adds app label to string representation of object_type, so get model name another way
+        return self.object_type.model_class()._meta.verbose_name
 
     def set_request_type(self, request_type: int = None):
         if request_type is not None:
@@ -126,6 +144,13 @@ class ChangeRequest(models.Model):
     def set_mod(self, request: object):
         self.mod = request.user
         self.mod_ip = get_ip_from_request(request)
+
+    def log(self, action: str = None, obj: str = None):
+        action = self.get_request_type_display() if action is None else action
+        obj = self if obj is None else obj
+        logger.info(f'ChangeRequest: [{action}] [{self.get_status_display()}] {obj}'
+                    f' user "{self.user.username}" ({self.user.pk})' +
+                    (f' mod "{self.mod.username}" ({self.mod.pk})' if self.mod else ''))
 
     def save(self, *args, **kwargs):
         # 1) Save ChangeRequest if request type is something like ADD or DELETE
@@ -146,11 +171,11 @@ class HistoryModel(models.Model):
         self._comment = ''
 
     @property
-    def comment(self):
+    def comment(self) -> str:
         return self._comment
 
     @comment.setter
-    def comment(self, comment):
+    def comment(self, comment: str):
         self._comment = comment
 
     def data_revert(self):
@@ -166,7 +191,10 @@ class HistoryModel(models.Model):
         cr.comment = self.comment
         cr.save()
         if cr.pk:
-            models.Model.save(self, *args, **kwargs)
+            cr.log()
+            super().save(*args, **kwargs)
+            msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
+                            f'{ChangeRequest.Type.verb[cr.request_type]} {cr.get_object_type()} "{cr.object_str}"')
 
     class Meta:
         abstract = True

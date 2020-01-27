@@ -9,11 +9,11 @@ from django.forms.models import model_to_dict as _model_to_dict
 
 def format_object_str(object_type: str, object_str, object_id) -> str:
     """Returns a string with object type and a string representation of the object and/or the primary key"""
-    result = '{}'.format(object_type)
+    result = f'{object_type}'
     if object_str:
-        result += ' "{}"'.format(object_str)
+        result += f' "{object_str}"'
     if object_id:
-        result += " ({})".format(object_id)
+        result += f' ({object_id})'
     return result
 
 
