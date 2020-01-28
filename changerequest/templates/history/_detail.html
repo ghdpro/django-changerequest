@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load history %}
+
+{% block content %}
+    <h1>{{ changerequest.get_object_type|title }} <span class="text-muted">History</span></h1>
+    <div class="container">
+{% with r='row py-1' h='col-lg-2 col-sm-3 pl-sm-2 font-weight-bold' d='col-lg-10 col-sm-9' %}
+    <div class="{{ r }}">
+        <div class="{{ h }}">Object</div>
+        <div class="{{ d }}">
+            {% if changerequest.object.get_absolute_url %}
+                <a href="{{ changerequest.object.get_absolute_url }}">{{ changerequest.object }}</a>
+            {% else %}
+                {{ changerequest.object_str }}
+            {% endif %}
+            <small>({{ changerequest.get_object_type|title }} #{{ changerequest.object_id }})</small>
+        </div>
+    </div>
+    <div class="{{ r }}">
+        <div class="{{ h }}">Action</div>
+        <div class="{{ d }}">
+            <span class="badge {% if changerequest.request_type == changerequest.Type.ADD %}badge-success{% elif changerequest.request_type == changerequest.Type.MODIFY %}badge-info{% elif changerequest.request_type == changerequest.Type.DELETE %}badge-danger{% else %}badge-secondary{% endif %}">{{ changerequest.get_request_type_display }}</span>
+            {% if changerequest.request_type == changerequest.Type.RELATED %} <strong>{{ changerequest.related_type|title }}</strong>{% endif %}</div>
+    </div>
+    <div class="{{ r }}">
+        <div class="{{ h }}">Status</div>
+        <div class="{{ d }}">
+            <span class="badge {% if changerequest.status == changerequest.Status.PENDING %}badge-info{% elif changerequest.status == changerequest.Status.APPROVED %}badge-success{% elif changerequest.status == changerequest.Status.DENIED %}badge-warning{% elif changerequest.status == changerequest.Status.REVERTED %}badge-danger{% else %}badge-secondary{% endif %}">{{ changerequest.get_status_display }}</span>
+        </div>
+    </div>
+    <div class="{{ r }}">
+        <div class="{{ h }}">Changes</div>
+        <div class="{{ d }}">
+            <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Old</th>
+                        <th>New</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for key, value in changerequest.diff.items %}
+                    <tr>
+                        <th>{{ key|title }}</th>
+                        {% if changerequest.request_type == changerequest.Type.ADD %}
+                            <td><span class="text-danger">-</span></td>
+                            <td>{% if value %}<span class="alert-success px-1">{{ value|linebreaksbr }}</span>{% else %}<span class="text-success">-</span>{% endif %}</td>
+                        {% elif changerequest.request_type == changerequest.Type.MODIFY %}
+                            <td>
+                                {% if changerequest.data_revert|_history_get:key %}
+                                    <span class="alert-danger px-1">{{ changerequest.data_revert|_history_get:key|linebreaksbr }}</span>
+                                {% else %}
+                                    <span class="text-danger">-</span>
+                                {% endif %}
+                            </td>
+                            <td>{% if value %}<span class="alert-success px-1">{{ value|linebreaksbr }}</span>{% else %}<span class="text-success">-</span>{% endif %}</td>
+                        {% elif changerequest.request_type == changerequest.Type.DELETE %}
+                            <td>{% if value %}<span class="alert-danger px-1">{{ value }}</span>{% else %}<span class="text-danger">-</span>{% endif %}</td>
+                            <td><span class="text-success">-</span></td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+    <div class="{{ r }}">
+        <div class="{{ h }}">Comment</div>
+        <div class="{{ d }}">{{ changerequest.comment|default:'-' }}</div>
+    </div>
+    <div class="{{ r }}">
+        <div class="{{ h }}">User</div>
+        <div class="{{ d }}">{% block user %}{{ changerequest.user.username }}{% endblock user %} <small>({{ changerequest.date_created }})</small></div>
+    </div>
+    {% if changerequest.mod is not None %}
+    <div class="{{ r }}">
+        <div class="{{ h }}">Mod</div>
+        <div class="{{ d }}">{% block mod %}{{ changerequest.mod.username }}{% endblock mod %} <small>({{ changerequest.date_modified }})</small></div>
+    </div>
+    {% endif %}
+    <form action="{% url 'history:action' changerequest.pk %}" method="post">
+        {% csrf_token %}
+	    <div class="form-group row mt-3">
+		    <div class="{{ h }}"></div>
+		    <div class="{{ d }}">
+                {% if changerequest.status == changerequest.Status.PENDING and perms.history.mod_approve %}
+                    <button type="submit" name="action" value="approve" class="btn btn-primary my-2"><i class="far fa-thumbs-up"></i> Approve</button>
+                    <button type="submit" name="action" value="deny" class="btn btn-primary my-2 ml-2"><i class="fas fa-ban"></i> Deny</button>
+                {% endif %}
+                {% if changerequest.status == changerequest.Status.APPROVED and perms.history.mod_approve %}
+                    <button type="submit" name="action" value="revert" class="btn btn-primary my-2"><i class="fas fa-backspace"></i> Revert</button>
+                {% endif %}
+                {% if changerequest.status == changerequest.Status.PENDING and request.user == changerequest.user %}
+                    <button type="submit" name="action" value="withdraw" class="btn btn-primary my-2"><i class="far fa-trash-alt"></i> Withdraw</button>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+{% endwith %}
+    </div>
+{% endblock content %}

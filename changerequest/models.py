@@ -4,8 +4,10 @@ import logging
 import threading
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
+from django.urls import reverse
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -103,9 +105,17 @@ class ChangeRequest(models.Model):
             self.object_id = None
         self.object_str = str(obj)
 
+    def cache_object_type(self):
+        # cache.get_or_set() is not usable here because accessing self.object_type members trigger database queries
+        model = cache.get(f'object-type-{self.object_type_id}')
+        if model is None:
+            model = self.object_type.model_class()
+            cache.set(f'object-type-{self.object_type_id}', model)
+        return model
+
     def get_object_type(self) -> str:
         # Django 3.0 now adds app label to string representation of object_type, so get model name another way
-        return self.object_type.model_class()._meta.verbose_name
+        return self.cache_object_type()._meta.verbose_name
 
     def set_request_type(self, request_type: int = None):
         if request_type is not None:
@@ -139,6 +149,26 @@ class ChangeRequest(models.Model):
         if (self.request_type not in (self.Type.MODIFY, self.Type.RELATED)) or (self.data_revert != self.data_changed):
             super().save(*args, **kwargs)
 
+    def diff(self):
+        model = self.cache_object_type()
+
+        def order_fields(data) -> dict:
+            # JSON dict order isn't guaranteed. Also replaces field name with verbose name.
+            return {f.verbose_name: data[f.name] for f in model._meta.get_fields() if f.name in data}
+
+        # ADD
+        if self.data_revert is None:
+            return order_fields(self.data_changed)
+        # DELETE
+        if self.data_changed is None:
+            return order_fields(self.data_revert)
+        # MODIFY
+        result = {k: v for k, v in self.data_changed.items() if k not in self.data_revert or self.data_revert[k] != v}
+        return order_fields(result)
+
+    def get_absolute_url(self, view='history:detail'):
+        return reverse(view, args=[self.pk])
+
 
 class HistoryModel(models.Model):
     """Adds audit logging and staged editing support to models"""
@@ -164,11 +194,18 @@ class HistoryModel(models.Model):
         cr.save()
         if cr.pk:
             cr.log()
-            super().save(*args, **kwargs)
-            # Only ADD/MODIFY as possible choices: DELETE and RELATED should be handled elsewhere
-            verb = 'Added' if cr.request_type == ChangeRequest.Type.ADD else 'Updated'  # MODIFY
-            msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
-                            f'{verb} {cr.get_object_type()} "{cr.object_str}"')
+            if cr.status == ChangeRequest.Status.APPROVED:
+                super().save(*args, **kwargs)
+                # Now object is saved, get pk and save change request again
+                cr.set_object(self)
+                cr.save()
+                # Only ADD/MODIFY as possible choices: DELETE and RELATED should be handled elsewhere
+                verb = 'Added' if cr.request_type == ChangeRequest.Type.ADD else 'Updated'  # MODIFY
+                msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
+                                f'{verb} {cr.get_object_type()} "{cr.object_str}"')
+            elif cr.status == ChangeRequest.Status.PENDING:
+                msg.add_message(ChangeRequest.get_request(), msg.WARNING, f'Change request for '
+                                f'{cr.get_object_type()} "{cr.object_str}" is pending moderator approval')
 
     class Meta:
         abstract = True
