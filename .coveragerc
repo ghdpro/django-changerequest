@@ -1,0 +1,9 @@
+[run]
+source = changerequest
+branch = True
+
+[report]
+exclude_lines =
+    pragma: no cover
+skip_covered = True
+show_missing = True
