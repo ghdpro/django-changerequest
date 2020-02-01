@@ -169,6 +169,16 @@ class ChangeRequest(models.Model):
     def get_absolute_url(self, view='history:detail'):
         return reverse(view, args=[self.pk])
 
+    class Meta:
+        permissions = (
+            ('self_approve', 'Can self-approve add, modify & related requests'),
+            ('self_delete', 'Can self-approve delete requests'),
+            ('throttle_min', 'Subject to more lenient throttling'),
+            ('throttle_off', 'Not subject to any throttling'),
+            ('mod_approve', 'Can moderate add, modify & related requests'),
+            ('mod_delete', 'Can moderate delete requests'),
+        )
+
 
 class HistoryModel(models.Model):
     """Adds audit logging and staged editing support to models"""
