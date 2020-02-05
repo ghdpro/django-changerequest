@@ -32,6 +32,23 @@ def model_to_dict(instance: object, exclude_pk: bool = True) -> dict:
     return data
 
 
+def formset_data_revert(formset) -> list:
+    """Obtains unaltered data for a formset from database"""
+    return [model_to_dict(obj, exclude_pk=False) for obj in formset.get_queryset().all()]
+
+
+def formset_data_changed(formset) -> list:
+    """Builds a list of (potentially altered and/or new) object instances from the formset"""
+    result = []
+    # Include original data (initial forms) if not marked for deletion
+    result += [model_to_dict(form.instance, exclude_pk=False) for form in formset.initial_forms
+               if form.instance.pk and form not in formset.deleted_forms]
+    # Include new data (extra forms) if data was entered (has changed) and not marked for immediate deletion (why?!?)
+    result += [model_to_dict(form.instance, exclude_pk=False) for form in formset.extra_forms
+               if form.has_changed() and not (formset.can_delete and formset._should_delete_form(form))]
+    return result
+
+
 def changed_keys(a: dict, b: dict) -> list:
     """Compares two dictionaries and returns list of keys where values are different"""
     # Note! This function disregards keys that don't appear in both dictionaries

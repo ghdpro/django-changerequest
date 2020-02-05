@@ -3,9 +3,9 @@
 from django import forms
 
 
-class HistoryCommentOptionalMixin(forms.Form):
+class HistoryCommentOptionalForm(forms.Form):
     comment = forms.CharField(label='Comment / Source', required=False)
 
 
-class HistoryCommentMandatoryMixin(forms.Form):
+class HistoryCommentMandatoryForm(forms.Form):
     comment = forms.CharField(label='Comment / Source', required=True)

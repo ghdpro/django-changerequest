@@ -14,7 +14,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages as msg
 from django.contrib.postgres.fields import JSONField
 
-from .utils import format_object_str, model_to_dict, changed_keys, filter_data, get_ip_from_request
+from .utils import (format_object_str, model_to_dict, formset_data_revert, formset_data_changed,
+                    changed_keys, filter_data, get_ip_from_request)
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +214,25 @@ class HistoryModel(models.Model):
                 verb = 'Added' if cr.request_type == ChangeRequest.Type.ADD else 'Updated'  # MODIFY
                 msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
                                 f'{verb} {cr.get_object_type()} "{cr.object_str}"')
+            elif cr.status == ChangeRequest.Status.PENDING:
+                msg.add_message(ChangeRequest.get_request(), msg.WARNING, f'Change request for '
+                                f'{cr.get_object_type()} "{cr.object_str}" is pending moderator approval')
+
+    def save_related(self, formset):
+        cr = ChangeRequest.create(self, ChangeRequest.Type.RELATED)
+        cr.related_type = ContentType.objects.get_for_model(formset.model)
+        cr.status = ChangeRequest.Status.APPROVED
+        cr.data_revert = formset_data_revert(formset)
+        cr.data_changed = formset_data_changed(formset)
+        cr.comment = self.comment
+        cr.save()
+        if cr.pk:
+            cr.log()
+            if cr.status == ChangeRequest.Status.APPROVED:
+                formset.save()
+                # Refresh data_changed: any new instances should now have a pk set
+                cr.data_changed = formset_data_revert(formset)
+                cr.save()
             elif cr.status == ChangeRequest.Status.PENDING:
                 msg.add_message(ChangeRequest.get_request(), msg.WARNING, f'Change request for '
                                 f'{cr.get_object_type()} "{cr.object_str}" is pending moderator approval')
