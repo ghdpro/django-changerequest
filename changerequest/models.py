@@ -106,17 +106,21 @@ class ChangeRequest(models.Model):
             self.object_id = None
         self.object_str = str(obj)
 
-    def cache_object_type(self):
+    def cache_object_type(self, object_type_id=None, object_type=None):
         # cache.get_or_set() is not usable here because accessing self.object_type members trigger database queries
-        model = cache.get(f'object-type-{self.object_type_id}')
+        obj_type_id = object_type_id if object_type_id is not None else self.object_type_id
+        model = cache.get(f'object-type-{obj_type_id}')
         if model is None:
-            model = self.object_type.model_class()
-            cache.set(f'object-type-{self.object_type_id}', model)
+            model = object_type.model_class() if object_type is not None else self.object_type.model_class()
+            cache.set(f'object-type-{obj_type_id}', model)
         return model
 
     def get_object_type(self) -> str:
         # Django 3.0 now adds app label to string representation of object_type, so get model name another way
         return self.cache_object_type()._meta.verbose_name
+
+    def get_related_type(self) -> str:
+        return self.cache_object_type(self.related_type_id, self.related_type)._meta.verbose_name
 
     def set_request_type(self, request_type: int = None):
         if request_type is not None:
@@ -230,12 +234,25 @@ class HistoryModel(models.Model):
             cr.log()
             if cr.status == ChangeRequest.Status.APPROVED:
                 formset.save()
+                # Generate message(s)
+                for obj in formset.new_objects:
+                    msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
+                                    f'Added {cr.get_related_type()} "{obj}"')
+                    cr.log('Add', format_object_str(cr.get_related_type(), obj, obj.pk))
+                for obj in formset.changed_objects:
+                    msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
+                                    f'Updated {cr.get_related_type()} "{obj}"')
+                    cr.log('Modify', format_object_str(cr.get_related_type(), obj, obj.pk))
+                for obj in formset.deleted_objects:
+                    msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
+                                    f'Deleted {cr.get_related_type()} "{obj}"')
+                    cr.log('Delete', format_object_str(cr.get_related_type(), obj, obj.pk))
                 # Refresh data_changed: any new instances should now have a pk set
                 cr.data_changed = formset_data_revert(formset)
                 cr.save()
             elif cr.status == ChangeRequest.Status.PENDING:
                 msg.add_message(ChangeRequest.get_request(), msg.WARNING, f'Change request for '
-                                f'{cr.get_object_type()} "{cr.object_str}" is pending moderator approval')
+                                f'{cr.get_related_type()} "{cr.object_str}" is pending moderator approval')
 
     class Meta:
         abstract = True
