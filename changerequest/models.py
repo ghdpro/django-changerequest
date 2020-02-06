@@ -15,7 +15,7 @@ from django.contrib import messages as msg
 from django.contrib.postgres.fields import JSONField
 
 from .utils import (format_object_str, model_to_dict, formset_data_revert, formset_data_changed,
-                    changed_keys, filter_data, get_ip_from_request)
+                    changed_keys, filter_data, get_ip_from_request, objectdict)
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +170,58 @@ class ChangeRequest(models.Model):
         # MODIFY
         result = {k: v for k, v in self.data_changed.items() if k not in self.data_revert or self.data_revert[k] != v}
         return order_fields(result)
+    
+    def diff_related(self):
+        result = {}
+        # Primary Key Field Name
+        result['pk'] = pk = self.cache_object_type(self.related_type_id, self.related_type)._meta.pk.name
+        # Fields
+        result['fields'] = [field for field in
+                            self.cache_object_type(self.related_type_id, self.related_type)._meta.get_fields()
+                            if isinstance(field, models.Field)]
+        # Get list of primary key values from existing rows (data_revert) to be able to check for new data
+        existing = [
+            item[pk] for item in self.data_revert if pk in item and item[pk]
+        ] if self.data_revert is not None else []
+        # {action} values are for detail views; {action_str} values are for list views
+        # Build list of added rows and changed rows from data_changed
+        result['added'] = []
+        result['added_str'] = []
+        changed = {}
+        if self.data_changed is not None:
+            for item in self.data_changed:
+                if pk in item and item[pk] and item[pk] in existing:
+                    # Existing row
+                    changed[item[pk]] = item
+                else:
+                    # New row
+                    result['added'].append(item)
+                    result['added_str'].append(self.cache_object_type(self.related_type_id, self.related_type)
+                                               .__str__(objectdict(item)))
+        # Build list of existing, modified and deleted rows
+        # `existing` contains original data and `modified` contains list of fields that may have changed
+        # Combined they allow data to be displayed with changes highlighted
+        result['existing'] = {}
+        result['modified'] = {}
+        result['modified_str'] = []
+        result['deleted'] = []
+        result['deleted_str'] = []
+        if self.data_revert is not None:
+            for item in self.data_revert:
+                row = item
+                if item[pk] in changed:
+                    diff = changed_keys(item, changed[item[pk]])
+                    if len(diff) > 0:
+                        result['modified'][item[pk]] = diff
+                        result['modified_str'].append(self.cache_object_type(self.related_type_id, self.related_type)
+                                                      .__str__(objectdict(item)))
+                        row = changed[item[pk]]
+                else:
+                    result['deleted'].append(item[pk])
+                    result['deleted_str'].append(self.cache_object_type(self.related_type_id, self.related_type)
+                                                 .__str__(objectdict(item)))
+                result['existing'][item[pk]] = row
+        return result
 
     def get_absolute_url(self, view='history:detail'):
         return reverse(view, args=[self.pk])

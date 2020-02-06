@@ -69,3 +69,13 @@ def get_ip_from_request(request: object) -> str:
             return addr[0]
     # else
     return request.META.get('REMOTE_ADDR')
+
+
+class objectdict(dict):
+    """.member access to dictionary attributes"""
+
+    def __getattr__(self, item):
+        if item in self:
+            return self[item]
+        else:
+            raise AttributeError(f"'dict' object has no attribute '{item}'")

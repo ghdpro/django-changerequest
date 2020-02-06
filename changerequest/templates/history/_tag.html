@@ -18,7 +18,28 @@
                 <td class="text-center"><span class="badge {% if cr.request_type == cr.Type.ADD %}badge-success{% elif cr.request_type == cr.Type.MODIFY %}badge-info{% elif cr.request_type == cr.Type.DELETE %}badge-danger{% else %}badge-secondary{% endif %}">{{ cr.get_request_type_display }}</span></td>
                 <td class="text-center"><span class="badge {% if cr.status == cr.Status.PENDING %}badge-info{% elif cr.status == cr.Status.APPROVED %}badge-success{% elif cr.status == cr.Status.DENIED %}badge-warning{% elif cr.status == cr.Status.REVERTED %}badge-danger{% else %}badge-secondary{% endif %}">{{ cr.get_status_display }}</span></td>
                 <td class="w-100">
-                {% if cr.request_type != cr.Type.ADD %}
+                {% if cr.request_type == cr.Type.RELATED %}
+                    {% with diff=cr.diff_related %}
+                        {% if diff.added_str|length > 0 %}
+                            <small class="text-success">Add:</small>
+                            {% for item in diff.added_str %}
+                                {{ item }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        {% if diff.modified_str|length > 0 %}
+                            <small class="text-info">Modify:</small>
+                            {% for item in diff.modified_str %}
+                                {{ item }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        {% if diff.deleted_str|length > 0 %}
+                            <small class="text-danger">Delete:</small>
+                            {% for item in diff.deleted_str %}
+                                {{ item }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                {% elif cr.request_type != cr.Type.ADD %}
                     {% for field in cr.diff %}
                         {{ field|title }}{% if not forloop.last %}, {% endif %}
                     {% empty %}
