@@ -275,7 +275,7 @@ class HistoryModel(models.Model):
                                 f'{cr.get_object_type()} "{cr.object_str}" is pending moderator approval')
 
     def save_related(self, formset):
-        cr = ChangeRequest.create(self, ChangeRequest.Type.RELATED)
+        cr = ChangeRequest.create(self, request_type=ChangeRequest.Type.RELATED)
         cr.related_type = ContentType.objects.get_for_model(formset.model)
         cr.status = ChangeRequest.Status.APPROVED
         cr.data_revert = formset_data_revert(formset)
@@ -305,6 +305,16 @@ class HistoryModel(models.Model):
             elif cr.status == ChangeRequest.Status.PENDING:
                 msg.add_message(ChangeRequest.get_request(), msg.WARNING, f'Change request for '
                                 f'{cr.get_related_type()} "{cr.object_str}" is pending moderator approval')
+
+    def delete(self, *args, **kwargs):
+        cr = ChangeRequest.create(self, request_type=ChangeRequest.Type.DELETE)
+        cr.comment = self.comment
+        cr.status = ChangeRequest.Status.APPROVED
+        cr.save()
+        super().delete(*args, **kwargs)
+        msg.add_message(ChangeRequest.get_request(), msg.SUCCESS,
+                        f'Deleted {cr.get_object_type()} "{cr.object_str}"')
+        cr.log()
 
     class Meta:
         abstract = True

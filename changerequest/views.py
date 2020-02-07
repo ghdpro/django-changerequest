@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.views.generic import DetailView, ListView
 
 from django.contrib.auth.mixins import PermissionRequiredMixin
-from django.contrib import messages
+from django.contrib import messages as msg
 
 from .forms import HistoryCommentOptionalForm
 from .models import ChangeRequest
@@ -24,7 +24,7 @@ class PermissionMessageMixin(PermissionRequiredMixin):
     permission_denied_message = 'You do not have sufficient permissions to access this page'
 
     def handle_no_permission(self):
-        messages.error(self.request, self.permission_denied_message)
+        msg.add_message(self.request, msg.ERROR, self.permission_denied_message)
         return super().handle_no_permission()
 
 
