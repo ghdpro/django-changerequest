@@ -8,6 +8,8 @@ from django.core.cache import cache
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.urls import reverse
+from django.utils.encoding import force_str
+from django.utils.hashable import make_hashable
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -154,22 +156,41 @@ class ChangeRequest(models.Model):
         if (self.request_type not in (self.Type.MODIFY, self.Type.RELATED)) or (self.data_revert != self.data_changed):
             super().save(*args, **kwargs)
 
+    def fields_verbose(self):
+        return {f.name: f.verbose_name
+                for f in self.cache_object_type()._meta.get_fields() if hasattr(f, 'verbose_name')}
+
+    def resolve_field(self, name, value):
+        field = self.cache_object_type()._meta.get_field(name)
+        # Field is Foreign Key
+        if isinstance(field, models.ForeignKey):
+            try:
+                obj = field.related_model.objects.get(**{field.remote_field.field_name: value})
+                return str(obj)
+            except models.ObjectDoesNotExist:
+                pass  # Reference no longer exists (deleted?)
+        # Other fields (code copied straight from django/db/models/base.py :: _get_FIELD_display)
+        choices_dict = dict(make_hashable(field.flatchoices))
+        return force_str(choices_dict.get(make_hashable(value), value), strings_only=True)
+
+    def order_fields(self, data, related=False) -> dict:
+        # JSON dict order isn't guaranteed
+        if related:
+            model = self.cache_object_type(self.related_type_id, self.related_type)
+        else:
+            model = self.cache_object_type()
+        return {f.name: data[f.name] for f in model._meta.get_fields() if f.name in data}
+
     def diff(self):
-        model = self.cache_object_type()
-
-        def order_fields(data) -> dict:
-            # JSON dict order isn't guaranteed. Also replaces field name with verbose name.
-            return {f.verbose_name: data[f.name] for f in model._meta.get_fields() if f.name in data}
-
         # ADD
         if self.data_revert is None:
-            return order_fields(self.data_changed)
+            return self.order_fields(self.data_changed)
         # DELETE
         if self.data_changed is None:
-            return order_fields(self.data_revert)
+            return self.order_fields(self.data_revert)
         # MODIFY
         result = {k: v for k, v in self.data_changed.items() if k not in self.data_revert or self.data_revert[k] != v}
-        return order_fields(result)
+        return self.order_fields(result)
     
     def diff_related(self):
         result = {}
@@ -195,7 +216,7 @@ class ChangeRequest(models.Model):
                     changed[item[pk]] = item
                 else:
                     # New row
-                    result['added'].append(item)
+                    result['added'].append(self.order_fields(item, related=True))
                     result['added_str'].append(self.cache_object_type(self.related_type_id, self.related_type)
                                                .__str__(objectdict(item)))
         # Build list of existing, modified and deleted rows
@@ -220,7 +241,7 @@ class ChangeRequest(models.Model):
                     result['deleted'].append(item[pk])
                     result['deleted_str'].append(self.cache_object_type(self.related_type_id, self.related_type)
                                                  .__str__(objectdict(item)))
-                result['existing'][item[pk]] = row
+                result['existing'][item[pk]] = self.order_fields(row, related=True)
         return result
 
     def get_absolute_url(self, view='history:detail'):

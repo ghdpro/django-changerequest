@@ -1,6 +1,9 @@
 """django-changerequest template tags"""
 
 from django import template
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
+
 from django.contrib.contenttypes.models import ContentType
 
 from ..models import ChangeRequest
@@ -18,6 +21,11 @@ def _history_view_method(obj, func, *args, **kwargs):
 def _history_get(dictionary, index):
     # 'Private' template tag used in History views
     return dictionary.get(index)
+
+
+@register.simple_tag
+def _history_resolve(cr, key, value):
+    return mark_safe(escape(cr.resolve_field(key, value)).replace('\n', '<br />'))
 
 
 @register.inclusion_tag('history/tag.html', takes_context=True)
