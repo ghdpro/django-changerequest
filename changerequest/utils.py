@@ -24,7 +24,7 @@ def model_to_dict(instance: object, exclude_pk: bool = True) -> dict:
     for field in instance._meta.get_fields():
         if field.name in raw:
             if isinstance(field, ManyToManyField):
-                continue  # TODO: implement M2M field support
+                data[field.name] = [obj.pk for obj in raw[field.name]]
             elif isinstance(field, FileField):
                 data[field.name] = str(raw[field.name])
             elif not exclude_pk or field.name != instance._meta.pk.name:

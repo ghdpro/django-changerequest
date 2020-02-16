@@ -279,11 +279,20 @@ class HistoryModel(models.Model):
         cr = ChangeRequest.create(self)
         cr.status = ChangeRequest.Status.APPROVED
         cr.comment = self.comment
+        form = kwargs['form'] if 'form' in kwargs else None
+        if form is not None:
+            # Original save() doesn't like form argument
+            del(kwargs['form'])
+            # TODO: get M2M data from form.cleaned_data
+            # cr.data_changed = changed_m2m_data(form, cr.data_changed)
         cr.save()
         if cr.pk:
             cr.log()
             if cr.status == ChangeRequest.Status.APPROVED:
                 super().save(*args, **kwargs)
+                # Save ManyToMany fields
+                if form is not None and hasattr(form, 'save_m2m'):
+                    form.save_m2m()
                 # Now object is saved, get pk and save change request again
                 cr.set_object(self)
                 cr.save()

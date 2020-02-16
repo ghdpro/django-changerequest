@@ -32,8 +32,14 @@ class HistoryFormViewMixin:
 
     @transaction.atomic
     def form_valid(self, form):
+        # We don't call super() here because the original form_valid() calls form.save() without commit=False
+        # If commit=True, then form.save() will *always* save ManyToMany fields, which is bad
         form.instance.comment = form.cleaned_data['comment']
-        return super().form_valid(form)
+        self.object = form.save(commit=False)
+        # By using commit=False, the form gains a "save_m2m()" function, but doesn't actually save the instance
+        # which is bad because django-changerequest functionilty is triggered there. So let's do it manually:
+        form.instance.save(form=form)
+        return HttpResponseRedirect(self.get_success_url())
 
 
 class HistoryFormsetViewMixin:
