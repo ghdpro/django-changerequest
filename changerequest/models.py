@@ -16,7 +16,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages as msg
 from django.contrib.postgres.fields import JSONField
 
-from .utils import (format_object_str, model_to_dict, formset_data_revert, formset_data_changed,
+from .utils import (format_object_str, model_to_dict, data_m2m, formset_data_revert, formset_data_changed,
                     changed_keys, filter_data, get_ip_from_request, objectdict)
 
 logger = logging.getLogger(__name__)
@@ -169,6 +169,15 @@ class ChangeRequest(models.Model):
                 return str(obj)
             except models.ObjectDoesNotExist:
                 pass  # Reference no longer exists (deleted?)
+        if isinstance(field, models.ManyToManyField):
+            try:
+                qs = [models.Q(**{field.related_model._meta.pk.name: v}) for v in value]
+                query = qs.pop()
+                for q in qs:
+                    query |= q
+                return ', '.join(str(obj) for obj in field.related_model.objects.filter(query))
+            except models.ObjectDoesNotExist:
+                pass  # Reference no longer exists (deleted?)
         # Other fields (code copied straight from django/db/models/base.py :: _get_FIELD_display)
         choices_dict = dict(make_hashable(field.flatchoices))
         return force_str(choices_dict.get(make_hashable(value), value), strings_only=True)
@@ -283,8 +292,7 @@ class HistoryModel(models.Model):
         if form is not None:
             # Original save() doesn't like form argument
             del(kwargs['form'])
-            # TODO: get M2M data from form.cleaned_data
-            # cr.data_changed = changed_m2m_data(form, cr.data_changed)
+            cr.data_changed = data_m2m(form, self, cr.data_changed)
         cr.save()
         if cr.pk:
             cr.log()

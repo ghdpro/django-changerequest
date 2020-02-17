@@ -32,6 +32,14 @@ def model_to_dict(instance: object, exclude_pk: bool = True) -> dict:
     return data
 
 
+def data_m2m(form: object, instance: object, data_changed: dict) -> dict:
+    """Extracts M2M data from form"""
+    for field in instance._meta.get_fields():
+        if isinstance(field, ManyToManyField) and field.name in form.cleaned_data:
+            data_changed[field.name] = [obj.pk for obj in form.cleaned_data[field.name]]
+    return data_changed
+
+
 def formset_data_revert(formset) -> list:
     """Obtains unaltered data for a formset from database"""
     return [model_to_dict(obj, exclude_pk=False) for obj in formset.get_queryset().all()]
