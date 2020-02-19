@@ -28,6 +28,11 @@ def _history_resolve(cr, key, value):
     return mark_safe(escape(cr.resolve_field(key, value)).replace('\n', '<br />'))
 
 
+@register.filter
+def _history_underspace(value):
+    return str(value).replace('_', ' ')
+
+
 @register.inclusion_tag('history/tag.html', takes_context=True)
 def history_object(context, obj):
     history = ChangeRequest.objects.filter(object_id=obj.pk, object_type=ContentType.objects.get_for_model(obj),

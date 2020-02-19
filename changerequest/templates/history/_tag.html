@@ -1,3 +1,4 @@
+{% load history %}
 <h2>History</h2>
 <div class="table-responsive">
     <table class="table table-sm table-hover">
@@ -41,7 +42,7 @@
                     {% endwith %}
                 {% elif cr.request_type != cr.Type.ADD %}
                     {% for field in cr.diff %}
-                        {{ field|title }}{% if not forloop.last %}, {% endif %}
+                        {{ field|_history_underspace|title }}{% if not forloop.last %}, {% endif %}
                     {% empty %}
                         -
                     {% endfor %}

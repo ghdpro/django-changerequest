@@ -68,7 +68,7 @@
                         {% endwith %}
                     {% elif cr.request_type != cr.Type.ADD %}
                         {% for field in cr.diff %}
-                            {{ field|title }}{% if not forloop.last %}, {% endif %}
+                            {{ field|_history_underspace|title }}{% if not forloop.last %}, {% endif %}
                         {% empty %}
                             -
                         {% endfor %}
