@@ -1,7 +1,7 @@
 django-changerequest
 ====================
 
-django-changeRequest is yet another model auditing/versioning package. As usual in cases like
+django-changerequest is yet another model auditing/versioning package. As usual in cases like
 these, it was created because I wasn't *quite* happy with any of the
 `existing solutions <https://djangopackages.org/grids/g/versioning/>`_
 (that are still being actively maintained).
