@@ -88,13 +88,8 @@ class ChangeRequest(models.Model):
         if cr.request_type != ChangeRequest.Type.RELATED:
             cr.data_revert = obj.data_revert()
             cr.data_changed = model_to_dict(obj)
-            if cr.request_type == ChangeRequest.Type.MODIFY:
-                fields = changed_keys(cr.data_revert, cr.data_changed)
-                if len(fields) > 0:  # Only filter data_revert & data_changed if there were changes found
-                    cr.data_revert = filter_data(cr.data_revert, fields)
-                    cr.data_changed = filter_data(cr.data_changed, fields)
-            elif cr.request_type == ChangeRequest.Type.DELETE:
-                cr.data_changed = None
+            if cr.request_type == ChangeRequest.Type.DELETE:
+                cr.data_changed = None  # Changes do not matter in case of deletion
         cr.set_user(ChangeRequest.get_request())
         return cr
 
@@ -293,6 +288,12 @@ class HistoryModel(models.Model):
             # Original save() doesn't like form argument
             del(kwargs['form'])
             cr.data_changed = data_m2m(form, self, cr.data_changed)
+        # Filter data to only include changed fields & nothing else
+        if cr.request_type == ChangeRequest.Type.MODIFY:
+            fields = changed_keys(cr.data_revert, cr.data_changed)
+            if len(fields) > 0:  # Only filter data_revert & data_changed if there were changes found
+                cr.data_revert = filter_data(cr.data_revert, fields)
+                cr.data_changed = filter_data(cr.data_changed, fields)
         cr.save()
         if cr.pk:
             cr.log()
