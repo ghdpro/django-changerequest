@@ -17,7 +17,7 @@ setup(
     install_requires=[
         'django>=3.0.3',
     ],
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     author='Gerard Krijgsman',
     author_email='python@visei.com',
     url='https://github.com/ghdpro/django-changerequest',
