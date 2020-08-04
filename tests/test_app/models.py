@@ -59,5 +59,4 @@ class Files(HistoryModel):
 class Other(HistoryModel):
     boolean = models.BooleanField()
     generic_ip = models.GenericIPAddressField()
-    null_boolean = models.NullBooleanField()
     uuid = models.UUIDField()

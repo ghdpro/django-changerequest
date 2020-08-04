@@ -14,7 +14,6 @@ from django.utils.hashable import make_hashable
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib import messages as msg
-from django.contrib.postgres.fields import JSONField
 
 from .utils import (format_object_str, model_to_dict, data_m2m, formset_data_revert, formset_data_changed,
                     changed_keys, filter_data, get_ip_from_request, objectdict)
@@ -60,8 +59,8 @@ class ChangeRequest(models.Model):
                                      on_delete=models.PROTECT)
     request_type = models.PositiveSmallIntegerField(choices=Type.choices)
     status = models.PositiveSmallIntegerField(choices=Status.choices, default=Status.PENDING)
-    data_revert = JSONField(encoder=DjangoJSONEncoder, null=True, blank=True)
-    data_changed = JSONField(encoder=DjangoJSONEncoder, null=True, blank=True)
+    data_revert = models.JSONField(encoder=DjangoJSONEncoder, null=True, blank=True)
+    data_changed = models.JSONField(encoder=DjangoJSONEncoder, null=True, blank=True)
     comment = models.TextField(blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='%(class)s_user', on_delete=models.PROTECT)
     user_ip = models.GenericIPAddressField(unpack_ipv4=True)
