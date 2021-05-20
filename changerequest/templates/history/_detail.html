@@ -19,13 +19,13 @@
     <div class="{{ r }}">
         <div class="{{ h }}">Action</div>
         <div class="{{ d }}">
-            <span class="badge {% if changerequest.request_type == changerequest.Type.ADD %}badge-success{% elif changerequest.request_type == changerequest.Type.MODIFY %}badge-info{% elif changerequest.request_type == changerequest.Type.DELETE %}badge-danger{% else %}badge-secondary{% endif %}">{{ changerequest.get_request_type_display }}</span>
+            <span class="badge {% if changerequest.request_type == changerequest.Type.ADD %}bg-success{% elif changerequest.request_type == changerequest.Type.MODIFY %}bg-info{% elif changerequest.request_type == changerequest.Type.DELETE %}bg-danger{% else %}badge-secondary{% endif %}">{{ changerequest.get_request_type_display }}</span>
             {% if changerequest.request_type == changerequest.Type.RELATED %} <strong>{{ changerequest.get_related_type|title }}</strong>{% endif %}</div>
     </div>
     <div class="{{ r }}">
         <div class="{{ h }}">Status</div>
         <div class="{{ d }}">
-            <span class="badge {% if changerequest.status == changerequest.Status.PENDING %}badge-info{% elif changerequest.status == changerequest.Status.APPROVED %}badge-success{% elif changerequest.status == changerequest.Status.DENIED %}badge-warning{% elif changerequest.status == changerequest.Status.REVERTED %}badge-danger{% else %}badge-secondary{% endif %}">{{ changerequest.get_status_display }}</span>
+            <span class="badge {% if changerequest.status == changerequest.Status.PENDING %}bg-info{% elif changerequest.status == changerequest.Status.APPROVED %}bg-success{% elif changerequest.status == changerequest.Status.DENIED %}bg-warning{% elif changerequest.status == changerequest.Status.REVERTED %}bg-danger{% else %}badge-secondary{% endif %}">{{ changerequest.get_status_display }}</span>
         </div>
     </div>
     <div class="{{ r }}">
@@ -119,7 +119,7 @@
     {% endif %}
     <form action="{% url 'history:action' changerequest.pk %}" method="post">
         {% csrf_token %}
-	    <div class="form-group row mt-3">
+	    <div class="row mt-3">
 		    <div class="{{ h }}"></div>
 		    <div class="{{ d }}">
                 {% if changerequest.status == changerequest.Status.PENDING and perms.history.mod_approve %}
